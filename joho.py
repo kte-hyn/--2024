@@ -1,56 +1,68 @@
 import streamlit as st
-st.title('初めてのstreamlit')
-st.write('これから作品を作っていきます．')
 
-text=st.text_input('あなたの名前を教えてください．')
-st.write("あなたの名前は，"+text+'です')
-condition=st.slider('あなたの今の調子は？',0,100,50)
-                    #最小値，最大値，スタート位置
-st.write('コンディション',condition)
-
-option=st.selectbox('好きな数字を教えてください', list(['1番','2番','3番','4番']))
-                   
-                    
-st.write('あなたの選んだ数字は' ,option ,'です')
-         
-import time
-st.sidebar.write('プログレスバーの表示')
-
-latest_iteration = st.empty() #空コンテンツと一緒に変数を作成
-bar = st.progress(0)#プログレスを作る
-
-for i in range(100):
-    latest_iteration.text(f'読み込み中{i+1}')#空のIterationにテキストを入れていく
-    bar.progress(i +1)#barの中身をぐいぐい増やしていく
-    time.sleep(0.001)
-
-left_column, right_column = st.columns(2)
-button = left_column.button('右カラムに文字を表示')
-if button:
-    right_column.write('ここは右カラムです')
-
-
-from PIL import Image #PILをpip install pillowを実施する
-img = Image.open('アントンちゃま.jpg')
-    #自分 の画像のファイル名にする(room.jpgは例えば)
-    #自分のPCの画像を同じフォルダに入れて指定する
-st.image(img, caption='アントンちゃま', use_column_width=True)
-
-import pandas as pd
+import streamlit as st
+import cv2
+import mediapipe as mp
+from PIL import Image
 import numpy as np
 
-df = pd.DataFrame(
-    np.random.rand(100,2)/[50,50] + [35.69,139.70],
-    columns = ['lat','lon',]#lat lon 緯度と経度
-)
-#緯度と経度から地図に書き込む
-st.map(df)
-st.table(df)
+# 顔検出と画像の明るさ評価を行う関数
+def analyze_image(image):
+    # 画像をOpenCV形式に変換
+    img_array = np.array(image)
+    img_rgb = cv2.cvtColor(img_array, cv2.COLOR_BGR2RGB)
 
-import numpy as np
-df = pd.DataFrame(
-np.random.rand(20,3), #20行3列
-columns = ['a','b','c']
-)
-#表として表示する
-st.table(df.style.highlight_max(axis=0))
+    # 画像の明るさを計算
+    brightness = np.mean(img_rgb)
+
+    # Mediapipeを使用して顔を検出
+    mp_face_detection = mp.solutions.face_detection
+    face_detection = mp_face_detection.FaceDetection(min_detection_confidence=0.2)
+
+    results = face_detection.process(img_rgb)
+
+    # 顔が検出されたかどうかを確認
+    face_detected = False
+    if results.detections:
+        face_detected = True
+
+    return face_detected, brightness
+
+# Streamlitインターフェース
+st.title("ベストショット選定アプリ📸")
+
+st.write("複数の画像をアップロードし、ベストショットを自動で選んでくれます!")
+
+# 複数画像をアップロード
+uploaded_images = st.file_uploader("画像を選択（複数可）", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
+
+if uploaded_images:
+    # アップロードされた全ての画像を処理
+    best_image = None
+    best_score = -1  # ベストショットのスコア（初期値は-1）
+
+    for img_file in uploaded_images:
+        image = Image.open(img_file)
+        st.image(image, caption=f"アップロードした画像: {img_file.name}", use_column_width=True)
+
+        # 画像解析
+        face_detected, brightness = analyze_image(image)
+
+        # スコアの計算
+        score = 0
+        if face_detected:
+            score += 50  # 顔が検出された場合は50点
+        if brightness > 100:  # 明るさが十分であれば追加点
+            score += 50
+
+        st.write(f"画像「{img_file.name}」のスコア: {score} (顔検出: {'あり' if face_detected else 'なし'}, 明るさ: {brightness})")
+
+        # 最もスコアが高い画像をベストショットとして選択
+        if score > best_score:
+            best_score = score
+            best_image = image
+
+    # ベストショットを表示
+    if best_image:
+        st.write("🎉 ベストショットはこの画像です！")
+        st.image(best_image, caption="ベストショット", use_column_width=True)
