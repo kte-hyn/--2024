@@ -1,3 +1,3 @@
 mediapipe ==0.10.18
-opencv-python
+opencv
 matplotlib ==3.9.3
